@@ -1,9 +1,11 @@
 // backend/server.js
+require("./tracing"); // Initialize OpenTelemetry tracing
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const taskRoutes = require("./routes/taskRoutes");
+
 
 // Load environment variables
 dotenv.config();

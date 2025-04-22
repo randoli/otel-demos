@@ -1,1 +1,1 @@
-# otel-demos
+# Randoli Observability - OpenTelemetry Demos

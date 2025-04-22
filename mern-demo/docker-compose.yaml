@@ -21,5 +21,17 @@ services:
       - "4317:4317" # gRPC endpoint
     networks:
       - otel-network
+
+    # Prometheus - stores and queries metrics
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./otel/prometheus.yaml:/etc/otel/prometheus.yml # metrics scrape configuration (specific to this setup)
+    ports:
+      - 9090:9090
+    networks:
+      - otel-network
+
 networks:
   otel-network:

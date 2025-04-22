@@ -8,7 +8,10 @@ const {
   OTLPTraceExporter,
 } = require("@opentelemetry/exporter-trace-otlp-http");
 const { resourceFromAttributes } = require("@opentelemetry/resources");
-
+const {
+  OTLPMetricExporter,
+} = require("@opentelemetry/exporter-metrics-otlp-http");
+const { PeriodicExportingMetricReader } = require("@opentelemetry/sdk-metrics");
 
 // This function initializes OpenTelemetry
 function initializeTracing() {
@@ -21,6 +24,14 @@ function initializeTracing() {
     // Send trace data to the OpenTelemetry Collector
     traceExporter: new OTLPTraceExporter({
       url: "http://localhost:4318/v1/traces",
+    }),
+
+    // Configure metrics export
+    metricReader: new PeriodicExportingMetricReader({
+      exporter: new OTLPMetricExporter({
+        url: "http://localhost:4318/v1/metrics",
+      }),
+      exportIntervalMillis: 15000, // Export metrics every 15 seconds
     }),
 
     // Auto-instrument common libraries
@@ -50,4 +61,28 @@ function initializeTracing() {
   return sdk;
 }
 
-module.exports = initializeTracing();
+// Export the meter for custom metrics
+const { metrics } = require("@opentelemetry/api");
+const meter = metrics.getMeter("task-management-backend");
+
+// Create some example metrics
+const taskCounter = meter.createCounter("task.created.count", {
+  description: "Number of tasks created",
+});
+
+const taskStatusHistogram = meter.createHistogram(
+  "task.status_change.duration",
+  {
+    description: "Time taken to change task status",
+    unit: "ms",
+  }
+);
+
+module.exports = {
+  sdk: initializeTracing(),
+  meter,
+  metrics: {
+    taskCounter,
+    taskStatusHistogram,
+  },
+};

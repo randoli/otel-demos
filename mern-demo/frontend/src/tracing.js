@@ -1,4 +1,3 @@
-// frontend/src/tracing.js
 import {
   WebTracerProvider,
   SimpleSpanProcessor,
@@ -9,31 +8,36 @@ import { DocumentLoadInstrumentation } from "@opentelemetry/instrumentation-docu
 import { FetchInstrumentation } from "@opentelemetry/instrumentation-fetch";
 import { registerInstrumentations } from "@opentelemetry/instrumentation";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
+import {
+  MeterProvider,
+  PeriodicExportingMetricReader,
+} from "@opentelemetry/sdk-metrics";
+import * as opentelemetry from "@opentelemetry/api";
 
-// Initialize tracing
-function initializeTracing() {
+// Initialize tracing and metrics
+function initialize() {
   try {
-    // Create the exporter
-    const exporter = new OTLPTraceExporter({
+    // Create the trace exporter
+    const traceExporter = new OTLPTraceExporter({
       url: "http://localhost:4318/v1/traces",
       headers: {},
     });
 
-    // Create the provider with span processors directly in the constructor
-    const provider = new WebTracerProvider({
+    // Create the provider with span processors
+    const tracerProvider = new WebTracerProvider({
       resource: resourceFromAttributes({
         "service.name": "task-management-frontend",
       }),
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
+      spanProcessors: [new SimpleSpanProcessor(traceExporter)],
     });
 
-    // Register the provider globally
-    provider.register({
-      // Changing default contextManager to use ZoneContextManager
+    // Register the trace provider globally
+    tracerProvider.register({
       contextManager: new ZoneContextManager(),
     });
 
-    // Registering instrumentations
+    // Set up auto-instrumentation for tracing
     registerInstrumentations({
       instrumentations: [
         new DocumentLoadInstrumentation(),
@@ -43,19 +47,70 @@ function initializeTracing() {
       ],
     });
 
+    // Initialize metrics
+    const metricExporter = new OTLPMetricExporter({
+      url: "http://localhost:4318/v1/metrics",
+      headers: {},
+    });
+
+    // Create the metric reader
+    const metricReader = new PeriodicExportingMetricReader({
+      exporter: metricExporter,
+      exportIntervalMillis: 15000, // Export metrics every 15 seconds
+    });
+
+    // Pass the reader in the MeterProvider constructor
+    const meterProvider = new MeterProvider({
+      resource: resourceFromAttributes({
+        "service.name": "task-management-frontend",
+      }),
+      readers: [metricReader], // Add the metric reader
+    });
+
+    // Make the meter provider global
+    opentelemetry.metrics.setGlobalMeterProvider(meterProvider);
+
     console.log("OpenTelemetry initialized for frontend");
 
-    // Export the tracer for manual instrumentation
-    return provider.getTracer("task-management-frontend");
+    // Create and export the meter for custom metrics
+    const meter = meterProvider.getMeter("task-management-frontend");
+
+    // Create some example metrics
+    const taskViewCounter = meter.createCounter("task.view.count", {
+      description: "Number of times tasks are viewed",
+    });
+
+    const formSubmitHistogram = meter.createHistogram("form.submit.duration", {
+      description: "Time taken to submit a form",
+      unit: "ms",
+    });
+
+    // Export the tracer and metrics
+    return {
+      tracer: tracerProvider.getTracer("task-management-frontend"),
+      meter,
+      metrics: {
+        taskViewCounter,
+        formSubmitHistogram,
+      },
+    };
   } catch (error) {
     console.error("Failed to initialize OpenTelemetry:", error);
-    // Return a no-op tracer so the app doesn't crash
+    // Return no-op implementations
     return {
-      startActiveSpan: (name, fn) => {
-        return fn({ end: () => {} });
+      tracer: {
+        startActiveSpan: (name, fn) => {
+          return fn({ end: () => {} });
+        },
+      },
+      meter: {},
+      metrics: {
+        taskViewCounter: { add: () => {} },
+        formSubmitHistogram: { record: () => {} },
       },
     };
   }
 }
 
-export const tracer = initializeTracing();
+// Export all telemetry objects
+export const { tracer, meter, metrics } = initialize();

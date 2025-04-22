@@ -21,6 +21,8 @@ exporters:
     endpoint: "jaeger:4317" # Send traces to Jaeger using OTLP gRPC
     tls:
       insecure: true
+  prometheus:
+    endpoint: "0.0.0.0:9090" # Expose metrics on this endpoint
   debug:
     verbosity: detailed
 
@@ -31,3 +33,7 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [debug, otlp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, prometheus]
